@@ -18,6 +18,7 @@ node_t *new_RED_node(key_t key);
 int insert_node_helper(rbtree *t, node_t *new_node, key_t key);
 int print_rbtree(node_t *curr);
 void rbtree_delete_fixup(rbtree *t, node_t *x);
+int delete_rbtree_helper(node_t *curr);
 node_t *rbtree_delete(rbtree *t, node_t *target);
 
 /////////////////////////////////////////////
@@ -28,6 +29,7 @@ rbtree *new_rbtree(void) {
 }
 
 void delete_rbtree(rbtree *t) {
+  delete_rbtree_helper(t->root);
   free(t);
 }
 
@@ -70,7 +72,7 @@ node_t *rbtree_insert(rbtree *t, const key_t key) {
       recolor(curr);
     }
   }
-  return t->root;
+  return new_node;
 }
 
 node_t *rbtree_find(const rbtree *t, const key_t key) {
@@ -102,6 +104,8 @@ node_t *rbtree_max(const rbtree *t) {
 }
 
 int rbtree_erase(rbtree *t, node_t *p) {
+  // exception case: no nodes
+
   node_t *target = rbtree_delete(t, p);
   free(target);
   return 0;
@@ -262,6 +266,9 @@ int print_rbtree(node_t *curr){
 // target 노드의 주소값을 받아 트리에서 제거
 node_t *rbtree_delete(rbtree *t, node_t *target){
 
+    // exception
+    if (target == NULL) return NULL;
+
     // 1. splice 대상 y 결정
 
     // target의 자식 노드가 0, 1개인 경우: splice 대상 y는 target 자신
@@ -286,6 +293,7 @@ node_t *rbtree_delete(rbtree *t, node_t *target){
     else{
       // exception: x가 NULL인 경우: 가상의 전역변수 NIL노드를 부여
       if (x == NULL) x = NIL;
+
 
       // y의 위치에 따라 부모-자식 관계 재형성(x와 y->parent)
       if (y == y->parent->left) y->parent->left = x;
@@ -322,7 +330,7 @@ node_t *rbtree_delete(rbtree *t, node_t *target){
 
 void rbtree_delete_fixup(rbtree *t, node_t *x){
   // iterate while x is not root and x is black
-  while (x->parent != NULL && x->color == RBTREE_BLACK){
+  while (x != NULL && x->parent != NULL && x->color == RBTREE_BLACK){
     // sibling node (whivh is 'w' in textbook)
     node_t *sibling = NULL;
     // x is left child
@@ -414,4 +422,16 @@ void rbtree_delete_fixup(rbtree *t, node_t *x){
     }
   } 
   if (x != NULL) x->color = RBTREE_BLACK;
+}
+
+int delete_rbtree_helper(node_t *curr){
+  // base case
+  if (curr == NULL) return 0;
+
+  // recursive call: dfs
+  delete_rbtree_helper(curr->left);
+  delete_rbtree_helper(curr->right);
+  // free memory escaping 'curr' node
+  free(curr);
+  return 0;
 }
