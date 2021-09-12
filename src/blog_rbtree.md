@@ -1,37 +1,45 @@
-#include "rbtree.h"
+# RB-tree
 
-#include <malloc.h>
-#include <stdio.h>
+## tree 구조체
+- root 노드 포인터를 멤버로 가져 트리 전체를 가리킨다
 
-
-node_t nil_node = {RBTREE_BLACK, 777, NULL, NULL, NULL};
-node_t * NIL = &nil_node;
-
-
-////////////////////////////////////////////
-// implicit declarations
-void left_rotate(rbtree *t, node_t* x);
-void right_rotate(rbtree *t, node_t* x);
-void recolor(node_t *curr);
-void recolor_rotate(rbtree *t, node_t *new_node);
-node_t *new_RED_node(key_t key);
-int insert_node_helper(rbtree *t, node_t *new_node, key_t key);
-int print_rbtree(node_t *curr);
-void rbtree_delete_fixup(rbtree *t, node_t *x);
-node_t *rbtree_delete(rbtree *t, node_t *target);
-int delete_rbtree_helper(node_t *curr);
-
-/////////////////////////////////////////////
+```
+typedef struct {
+  node_t *root;
+} rbtree;
 
 rbtree *new_rbtree(void) {
   rbtree *p = (rbtree *)calloc(sizeof(rbtree), 1);
   return p;
 }
+```
 
-void delete_rbtree(rbtree *t) {
-  delete_rbtree_helper(t->root);
-  free(t);
-}
+## node 구조체
+- color(red, black), key, parent, left-child, right-child를 멤버로 갖는다
+
+```
+typedef enum { RBTREE_RED, RBTREE_BLACK } color_t;
+typedef int key_t;
+
+typedef struct node_t {
+  color_t color;
+  key_t key;
+  struct node_t *parent, *left, *right;
+} node_t;
+```
+
+## node insert 함수
+1. red 색상을 갖는 새 노드 생성
+2. 일반적인 BST(binary-search-tree) 규칙으로 먼저 노드를 추가(루트일 경우 black으로 변경)
+3. red-red-conflict(새 노드와 그 부모가 모두 red일 경우, left_rotate(), right_rotate(), recolor() 등의 추가적인 조작 필요
+
+
+```
+node_t *new_RED_node(key_t key);
+void recolor(node_t *curr);
+void left_rotate(rbtree *t, node_t* x);
+void right_rotate(rbtree *t, node_t* x);
+void recolor_rotate(rbtree *t, node_t *new_node);
 
 node_t *rbtree_insert(rbtree *t, const key_t key) {
 
@@ -74,50 +82,6 @@ node_t *rbtree_insert(rbtree *t, const key_t key) {
   }
   return new_node;
 }
-
-node_t *rbtree_find(const rbtree *t, const key_t key) {
-  node_t *curr = t->root;
-  //move to chile node
-  while (curr != NULL && curr->key != key){
-    // search left-subtree
-    if (key < curr->key) curr = curr->left;
-    // search left-subtree
-    else curr = curr->right;
-  }
-  // end of tree
-  if (curr == NULL) printf("cannot find a node with given value %d !!\n", key);
-  return curr;
-}
-
-node_t *rbtree_min(const rbtree *t) {
-  node_t *curr = t->root;
-  // move to most-left-outside node
-  while (curr != NULL && curr->left != NULL) curr = curr->left;
-  return curr;
-}
-
-node_t *rbtree_max(const rbtree *t) {
-  node_t *curr = t->root;
-  // move to most-right-outside node
-  while (curr != NULL && curr->right != NULL) curr = curr->right;
-  return curr;
-}
-
-int rbtree_erase(rbtree *t, node_t *p) {
-  // exception case: no nodes
-
-  node_t *target = rbtree_delete(t, p);
-  free(target);
-  return 0;
-}
-
-int rbtree_to_array(const rbtree *t, key_t *arr, const size_t n) {
-  // TODO: implement to_array
-  return 0;
-}
-
-/////////////////////////////////////////////////////
-// my functions
 
 void left_rotate(rbtree *t, node_t* x){
   //        |                 |
@@ -221,47 +185,32 @@ node_t *new_RED_node(key_t key){
   new_node->right = NULL;
   return new_node;
 }
+```
 
-// 이진트리원칙에 의해 새 노드 추가
-int insert_node_helper(rbtree *t, node_t *new_node, key_t key){
-  // case1: empty tree 
-  // recolor new node and make it as root node
-  if (t->root == NULL){
-    // recolor new node and make it as the root of tree
-    recolor(new_node);
-    t->root = new_node;
-    return 1;
-  }
-  // insert할 위치 결정(binary tree search)
-  node_t *curr = t->root;   // root부터 탐색 시작
-  node_t *before = NULL;    // curr직전 노드 기록(이 노드 밑에 새 노드 추가)
-  while (curr != NULL){
-    before = curr;
-    if (key < curr->key) curr = curr->left;
-    else curr = curr->right;
-  }
-  // before노드에 new_node 추가
-  new_node->parent = before;
-  if (key < before->key) before->left = new_node;
-  else before->right = new_node;
+## node erase 함수
+1. 일반적인 BST트리 노드 제거
+2. 잘려나간 노드가 black 노드일 경우 fix-up 조작을 통해 rb트리의 특성 보존
+3. double-black문제를 해결하기 위해 sibling노드의 색과 그 자식들의 색에 따라 case를 나눔
+4. delete할때만 introduction to algorithms 책에 나온 NIL노드를 도입하고 delete완료 후 NIL노드를 트리에서 제거함으로서 마지막 노드들은 NULL포인터를 가리키도록 함
+
+```
+// 가상의 NIL 노드(전역변수)
+node_t nil_node = {RBTREE_BLACK, 777, NULL, NULL, NULL};
+node_t * NIL = &nil_node;
+
+// 첫 3개의 함수는 insert함수 밑에 첨부해서 여기서는 따로 코드 추가하지 않겠습니다
+void left_rotate(rbtree *t, node_t* x);
+void right_rotate(rbtree *t, node_t* x);
+void recolor(node_t *curr);
+void rbtree_delete_fixup(rbtree *t, node_t *x);
+node_t *rbtree_delete(rbtree *t, node_t *target);
+
+int rbtree_erase(rbtree *t, node_t *p) {
+  // exception case: no nodes
+
+  node_t *target = rbtree_delete(t, p);
+  free(target);
   return 0;
-};
-
-
-// print (key, color) of all nodes in RB-tree
-int print_rbtree(node_t *curr){
-
-  // base case
-  if (curr == NULL) return 0;
-
-  // recursive call: dfs
-  print_rbtree(curr->left);
-  printf("key: %d, color: ", curr->key);
-  if (curr->color == RBTREE_BLACK) printf("black\n");
-  else printf("red\n");
-  print_rbtree(curr->right);
-  return 0;
-}
 
 // target 노드의 주소값을 받아 트리에서 제거
 node_t *rbtree_delete(rbtree *t, node_t *target){
@@ -423,6 +372,83 @@ void rbtree_delete_fixup(rbtree *t, node_t *x){
   } 
   if (x != NULL) x->color = RBTREE_BLACK;
 }
+```
+
+## 기타 함수들
+
+### find 함수
+1. 루트 노드부터 각 노드의 키 값과 대소비교하여 left-subtree, right-subtree로 갈 것인지 결정
+2. 종료조건1: 찾는 값이 없는 경우 끝까지 탐색하여 NULL에 도달 후 경고문과 함께 NULL 반환
+3. 종료조건2: target key를 가진 노드의 주소 반환
+
+```
+node_t *rbtree_find(const rbtree *t, const key_t key) {
+  node_t *curr = t->root;
+  //move to chile node
+  while (curr != NULL && curr->key != key){
+    // search left-subtree
+    if (key < curr->key) curr = curr->left;
+    // search left-subtree
+    else curr = curr->right;
+  }
+  // end of tree
+  if (curr == NULL) printf("cannot find a node with given value %d !!\n", key);
+  return curr;
+}
+```
+
+### min, max 함수
+1. min의 경우 트리의 가장 왼쪽에 있는 노드 반환
+2. max의 경우 트리의 가장 오른쪽에 있는 노드 반환
+
+```
+node_t *rbtree_min(const rbtree *t) {
+  node_t *curr = t->root;
+  // move to most-left-outside node
+  while (curr != NULL && curr->left != NULL) curr = curr->left;
+  return curr;
+}
+
+node_t *rbtree_max(const rbtree *t) {
+  node_t *curr = t->root;
+  // move to most-right-outside node
+  while (curr != NULL && curr->right != NULL) curr = curr->right;
+  return curr;
+}
+```
+
+### tree print 함수
+1. dfs로 트리 탐색(recursion)
+2. left-subtree출력 -> 현재 노드 출력 -> right-subtree 출력 순서
+
+```
+// print (key, color) of all nodes in RB-tree
+int print_rbtree(node_t *curr){
+
+  // base case
+  if (curr == NULL) return 0;
+
+  // recursive call: dfs
+  print_rbtree(curr->left);
+  printf("key: %d, color: ", curr->key);
+  if (curr->color == RBTREE_BLACK) printf("black\n");
+  else printf("red\n");
+  print_rbtree(curr->right);
+  return 0;
+}
+```
+
+### tree 전체 삭제 함수
+1. 동적할당된 노드들과 트리 전체를 해제 후 삭제하는 함수
+2. dfs로 탐색하면서(recursion) 노드를 빠져나갈 때, 해당 노드 free
+
+```
+int delete_rbtree_helper(node_t *curr)
+
+void delete_rbtree(rbtree *t) {
+  delete_rbtree_helper(t->root);
+  free(t);
+}
 
 int delete_rbtree_helper(node_t *curr){
   // base case
@@ -435,3 +461,4 @@ int delete_rbtree_helper(node_t *curr){
   free(curr);
   return 0;
 }
+```
